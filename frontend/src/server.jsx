@@ -21,4 +21,6 @@ export async function addBet(betID, betChoice, amount) {
         },
         body: JSON.stringify({id: betID, choice: betChoice, amount,})
     });
+    const data = await response.json();
+    return data.playerID;
 }

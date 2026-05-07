@@ -65,48 +65,56 @@ const App = () => {
         setBalance(getVerifiedBalance());
     }, []);
 
+    const syncData = async () => {
+        const liveData = await fetchBetData();
+        setMarkets(liveData);
+
+        const activeBets = JSON.parse(localStorage.getItem('active_bets') || '[]');
+        if (activeBets.length > 0) {
+            let currentBal = getVerifiedBalance();
+            let updatedBets = [...activeBets];
+            let changed = false;
+
+            activeBets.forEach((bet) => {
+                const settledMarket = liveData.find(m => m.data.title === bet.marketTitle);
+
+                // If a winner is declared (market is settled)
+                if (settledMarket && settledMarket.data.winner !== null) {
+                    const winnerIdx = settledMarket.data.winner - 1;
+
+                    if (bet.optionIndex === winnerIdx) {
+                        const multiplier = parseFloat(bet.mult) || 1;
+                        const payout = bet.amount * multiplier;
+
+                        currentBal += payout;
+                        triggerNotify(`WINNER: +$${payout.toFixed(2)}`, bet.marketTitle);
+                    }
+                    // Cleanup: Remove this bet from the active list
+                    updatedBets = updatedBets.filter(b => b.timestamp !== bet.timestamp);
+                    changed = true;
+                }
+            });
+
+            if (changed) {
+                setBalance(currentBal);
+                saveSecureBalance(currentBal);
+                localStorage.setItem('active_bets', JSON.stringify(updatedBets));
+            }
+        }
+    };
     // --- DATA SYNC & WIN CALCULATION ---
     useEffect(() => {
-        const syncData = async () => {
-            const liveData = await fetchBetData();
-            setMarkets(liveData);
-
-            const activeBets = JSON.parse(localStorage.getItem('active_bets') || '[]');
-            if (activeBets.length > 0) {
-                let currentBal = getVerifiedBalance();
-                let updatedBets = [...activeBets];
-                let changed = false;
-
-                activeBets.forEach((bet) => {
-                    const settledMarket = liveData.find(m => m.data.title === bet.marketTitle);
-
-                    if (settledMarket && settledMarket.data.winner !== null) {
-                        const winnerIdx = settledMarket.data.winner;
-
-                        if (bet.optionIndex === winnerIdx) {
-                            const multiplier = parseFloat(bet.mult) || 1;
-                            const payout = bet.amount * multiplier;
-
-                            currentBal += payout;
-                            triggerNotify(`WINNER: +$${payout.toFixed(2)}`, bet.marketTitle);
-                        }
-                        updatedBets = updatedBets.filter(b => b.timestamp !== bet.timestamp);
-                        changed = true;
-                    }
-                });
-
-                if (changed) {
-                    setBalance(currentBal);
-                    saveSecureBalance(currentBal);
-                    localStorage.setItem('active_bets', JSON.stringify(updatedBets));
-                }
-            }
-        };
-
-        const interval = setInterval(syncData, 5000);
+        // Initialize the first fetch immediately
         syncData();
+
+        // Set up the 5-second heartbeat
+        const interval = setInterval(() => {
+            syncData();
+        }, 5000);
+
+        // Cleanup interval on unmount
         return () => clearInterval(interval);
-    }, []);
+    }, []); // Empty dependency array means this runs once on mount
 
     const triggerNotify = (msg, sub) => {
         const id = Date.now();
@@ -114,7 +122,8 @@ const App = () => {
         setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 5000);
     };
 
-    const placeBet = () => {
+    const placeBet = async () => {
+        syncData();
         const amount = parseFloat(betAmount);
         const currentVerified = getVerifiedBalance();
 
@@ -123,19 +132,21 @@ const App = () => {
             return;
         }
 
-        const newBal = currentVerified - amount;
-        setBalance(newBal);
-        saveSecureBalance(newBal);
+        const id = await addBet(selectedBet.marketId, selectedBet.optionIndex, amount);
+        console.log(id);
+        if (id != -1) {
+            const newBal = currentVerified - amount;
+            setBalance(newBal);
+            saveSecureBalance(newBal);
 
-        const activeBets = JSON.parse(localStorage.getItem('active_bets') || '[]');
-        const newBetRecord = {
-            ...selectedBet,
-            amount,
-            timestamp: Date.now()
-        };
-        localStorage.setItem('active_bets', JSON.stringify([...activeBets, newBetRecord]));
-
-        addBet(selectedBet.marketId, selectedBet.optionIndex, amount);
+            const activeBets = JSON.parse(localStorage.getItem('active_bets') || '[]');
+            const newBetRecord = {
+                ...selectedBet,
+                amount,
+                timestamp: Date.now()
+            };
+            localStorage.setItem('active_bets', JSON.stringify([...activeBets, newBetRecord]));
+        }
 
         setSelectedBet(null);
         setBetAmount('');
@@ -160,42 +171,44 @@ const App = () => {
             <div style={styles.grid}>
                 {markets.map((market, idx) => {
                     const totalPool = market.totals.reduce((sum, t) => sum + t, 0);
-                    return (
-                        <div key={market.id || idx} style={styles.card}>
-                            <h3 style={styles.cardTitle}>{market.data.title}</h3>
-                            {market.data.options.map((option, optIdx) => {
-                                const percentage = totalPool > 0 ? (market.totals[optIdx] / totalPool * 100).toFixed(1) : 0;
-                                const mult = market.mults[optIdx] || 1.0;
+                    if (market.data.winner == null) {
+                        return (
+                            <div key={market.id || idx} style={styles.card}>
+                                <h3 style={styles.cardTitle}>{market.data.title}</h3>
+                                {market.data.options.map((option, optIdx) => {
+                                    const percentage = totalPool > 0 ? (market.totals[optIdx] / totalPool * 100).toFixed(1) : 0;
+                                    const mult = market.mults[optIdx] || 1.0;
 
-                                return (
-                                    <div key={optIdx}
-                                        onClick={() => setSelectedBet({
-                                            marketId: market.id || idx,
-                                            optionIndex: optIdx,
-                                            marketTitle: market.data.title,
-                                            optionName: option,
-                                            mult
-                                        })}
-                                        style={styles.optionRow}>
-                                        <div style={styles.optionMain}>
-                                            <span style={styles.optionName}>{option}</span>
-                                            <div style={styles.multBadge}>{mult.toFixed(2)}x</div>
-                                        </div>
-                                        <div style={styles.poolInfo}>
-                                            <div style={styles.poolDetails}>
-                                                <DollarSign size={12} />
-                                                <span>${market.totals[optIdx].toLocaleString()} pool</span>
-                                                <span style={styles.pctLabel}>{percentage}%</span>
+                                    return (
+                                        <div key={optIdx}
+                                            onClick={() => setSelectedBet({
+                                                marketId: market.id || idx,
+                                                optionIndex: optIdx,
+                                                marketTitle: market.data.title,
+                                                optionName: option,
+                                                mult
+                                            })}
+                                            style={styles.optionRow}>
+                                            <div style={styles.optionMain}>
+                                                <span style={styles.optionName}>{option}</span>
+                                                <div style={styles.multBadge}>{mult.toFixed(2)}x</div>
                                             </div>
-                                            <div style={styles.progressTrack}>
-                                                <div style={{ ...styles.progressFill, width: `${percentage}%` }} />
+                                            <div style={styles.poolInfo}>
+                                                <div style={styles.poolDetails}>
+                                                    <DollarSign size={12} />
+                                                    <span>${market.totals[optIdx].toLocaleString()} pool</span>
+                                                    <span style={styles.pctLabel}>{percentage}%</span>
+                                                </div>
+                                                <div style={styles.progressTrack}>
+                                                    <div style={{ ...styles.progressFill, width: `${percentage}%` }} />
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    );
+                                    );
+                                })}
+                            </div>
+                        );
+                    }
                 })}
             </div>
 
