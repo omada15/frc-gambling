@@ -1,4 +1,4 @@
-const LINK = "http://localhost:3000"
+const LINK = (window.location.href == "localhost:5173") ? "http://localhost:3000" : "https://frc-gambling.vercel.app/";
 
 export async function fetchBetData() {
     const response = await fetch(`${LINK}/bets`, {

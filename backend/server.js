@@ -1,11 +1,17 @@
 import express from "express";
+import dotenv from "dotenv";
+
+dotenv.config()
 
 const app = express();
 app.use(express.json());
 const router = express.Router();
-
+const LINK =
+    process.env.dev == "true"
+        ? "http://localhost:5173"
+        : "https://frc-gambling.vercel.app";
 app.use((req, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", "http://localhost:5173");
+    res.setHeader("Access-Control-Allow-Origin", LINK);
     res.setHeader(
         "Access-Control-Allow-Methods",
         "GET,POST,PUT,DELETE,OPTIONS",
@@ -22,22 +28,22 @@ app.use((req, res, next) => {
     next();
 });
 app.use(express.static("./frontend/dist"));
-// var betChoices = [];
-// var bets = [];
+var betChoices = [];
+var bets = [];
 
-var betChoices = [
-    {
-        title: "yes or no",
-        options: ["yes", "no"],
-        winner: null,
-    },
-];
-var bets = [
-    [
-        { choiceIndex: 0, amount: 16 },
-        { choiceIndex: 1, amount: 15 },
-    ],
-];
+// var betChoices = [
+//     {
+//         title: "yes or no",
+//         options: ["yes", "no"],
+//         winner: null,
+//     },
+// ];
+// var bets = [
+//     [
+//         { choiceIndex: 0, amount: 16 },
+//         { choiceIndex: 1, amount: 15 },
+//     ],
+// ];
 
 var totals = new Array(betChoices.length).fill(0);
 var mults = new Array(betChoices.length).fill(0);
