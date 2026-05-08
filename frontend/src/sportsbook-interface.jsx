@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Flame, TrendingUp, DollarSign, Wallet, Check, X, ShieldAlert } from 'lucide-react';
 import { fetchBetData, addBet } from './server';
 
-// --- SECURITY & STORAGE HELPERS ---
 const SECRET_SALT = "live_odds_v1_secure";
 
 const generateSignature = (val) => {
@@ -60,7 +59,6 @@ const App = () => {
     const [betAmount, setBetAmount] = useState('');
     const [notifications, setNotifications] = useState([]);
 
-    // Initialize Balance on Mount
     useEffect(() => {
         setBalance(getVerifiedBalance());
     }, []);
@@ -78,7 +76,6 @@ const App = () => {
             activeBets.forEach((bet) => {
                 const settledMarket = liveData.find(m => m.data.title === bet.marketTitle);
 
-                // If a winner is declared (market is settled)
                 if (settledMarket && settledMarket.data.winner !== null) {
                     const winnerIdx = settledMarket.data.winner - 1;
 
@@ -89,7 +86,6 @@ const App = () => {
                         currentBal += payout;
                         triggerNotify(`WINNER: +$${payout.toFixed(2)}`, bet.marketTitle);
                     }
-                    // Cleanup: Remove this bet from the active list
                     updatedBets = updatedBets.filter(b => b.timestamp !== bet.timestamp);
                     changed = true;
                 }
@@ -102,19 +98,15 @@ const App = () => {
             }
         }
     };
-    // --- DATA SYNC & WIN CALCULATION ---
     useEffect(() => {
-        // Initialize the first fetch immediately
         syncData();
 
-        // Set up the 5-second heartbeat
         const interval = setInterval(() => {
             syncData();
         }, 5000);
 
-        // Cleanup interval on unmount
         return () => clearInterval(interval);
-    }, []); // Empty dependency array means this runs once on mount
+    }, []);
 
     const triggerNotify = (msg, sub) => {
         const id = Date.now();

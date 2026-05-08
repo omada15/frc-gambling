@@ -28,22 +28,22 @@ app.use((req, res, next) => {
     next();
 });
 app.use(express.static("./frontend/dist"));
-var betChoices = [];
-var bets = [];
+// var betChoices = [];
+// var bets = [];
 
-// var betChoices = [
-//     {
-//         title: "yes or no",
-//         options: ["yes", "no"],
-//         winner: null,
-//     },
-// ];
-// var bets = [
-//     [
-//         { choiceIndex: 0, amount: 16 },
-//         { choiceIndex: 1, amount: 15 },
-//     ],
-// ];
+var betChoices = [
+    {
+        title: "yes or no",
+        options: ["yes", "no"],
+        winner: 0,
+    },
+];
+var bets = [
+    [
+        { choiceIndex: 0, amount: 16 },
+        { choiceIndex: 1, amount: 15 },
+    ],
+];
 
 var totals = new Array(betChoices.length).fill(0);
 var mults = new Array(betChoices.length).fill(0);
@@ -105,16 +105,15 @@ function newBet(title, choices) {
 }
 
 router.post("/addBet", (req, res) => {
-    console.log(req.body);
+    console.log(`New better id ${req.body}`)
     res.send({
         playerID: addBet(req.body.id, req.body.choice, req.body.amount),
     });
     console.log(bets);
 });
 router.post("/finishBet", (req, res) => {
-    console.log(req.body);
     betChoices[req.body.id].winner = req.body.winner;
-    res.send({ message: "recieved" });
+    res.send({ message: "recieved bet end" });
 });
 router.get("/bets", (req, res) => {
     var retur = [];
@@ -123,6 +122,11 @@ router.get("/bets", (req, res) => {
         retur.push({ data: p, mults: mults, totals });
     });
     res.json(retur);
+});
+
+router.post("/newBet", (req, res) => {
+    newBet(req.body.title, req.body.choices);
+    res.json({message: "recieved new bet"})
 });
 
 app.use(router);
